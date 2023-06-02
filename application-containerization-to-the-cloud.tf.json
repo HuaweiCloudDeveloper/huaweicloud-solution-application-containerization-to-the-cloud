@@ -1,0 +1,214 @@
+{
+	"terraform": {
+		"required_providers": [
+			{
+				"huaweicloud": {
+					"source": "huawei.com/provider/huaweicloud",
+					"version": ">=1.42.0"
+				}
+			}
+		]
+	},
+	"provider": {
+		"huaweicloud": {
+			"cloud": "myhuaweicloud.com",
+			"endpoints": {
+				"iam": "iam.ap-southeast-3.myhuaweicloud.com",
+				"dns": "dns.ap-southeast-3.myhuaweicloud.com",
+				"bss": "bss.myhuaweicloud.com"
+			},
+			"insecure": true,
+			"region": "ap-southeast-3",
+			"auth_url": "https://iam.ap-southeast-3.myhuaweicloud.com/v3"
+		}
+	},
+	"variable": {
+		"vpc_name": {
+			"default": "application-containerization-to-the-cloud-demo",
+			"description": "Virtual Private Cloud (VPC) name. This template uses a newly created VPC and the VPC name must be unique. The value can contain 1 to 64 characters, including letters, digits, underscores (_), hyphens (-), and periods (.). Default value: application-containerization-to-the-cloud-demo",
+			"type": "string",
+			"nullable": false,
+			"validation": {
+                "condition": "${length(regexall(\"^[\\\\w\\\\-\\\\.]{1,57}$\",var.vpc_name))>0}",
+                "error_message": "Invalid input. Please re-enter."
+            }
+		},
+		"cce_name": {
+			"default": "application-containerization-to-the-cloud-demo",
+			"description": "Cloud Container Engine (CCE) name. The value can contain 4 to 128 characters, including letters, digits, and hyphens (-). It must start with a letter and cannot end with a hyphen (-). Default value: application-containerization-to-the-cloud-demo",
+			"type": "string",
+			"nullable": false,
+			"validation": {
+                "condition": "${length(regexall(\"^[a-z][a-z0-9-]{2,126}[a-z0-9]$\",var.cce_name))>0}",
+                "error_message": "Invalid input. Please re-enter."
+            }
+		},
+		"node_pool_name": {
+			"default": "application-containerization-to-the-cloud-demo",
+			"description": "Node pool name. The value can contain 1 to 50 characters, including letters, digits, and hyphens (-). It must start with a letter and cannot end with a hyphen (-). Default value: application-containerization-to-the-cloud-demo",
+			"type": "string",
+			"nullable": false,
+			"validation": {
+                "condition": "${length(regexall(\"^[a-z]$|^[a-z][a-z0-9-]{0,48}[a-z0-9]$\",var.node_pool_name))>0}",
+                "error_message": "Invalid input. Please re-enter."
+            }
+		},
+		"node_pool_password": {
+			"default": "",
+			"description": "Node pool password. The value can contain 8 to 26 characters, including at least three types of the following characters: uppercase letters, lowercase letters, digits, and special characters (!@$%^-_=+[{}]:,./?).",
+			"type": "string",
+			"nullable": false,
+			"sensitive": "true"
+		}
+	},
+	"data": {
+		"huaweicloud_cce_addon_template": {
+			"autoscaler": {
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"name": "autoscaler",
+				"version": "1.19.12"
+			},
+			"cce-hpa-controller": {
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"name": "cce-hpa-controller",
+				"version": "1.2.11"
+			},
+			"metrics-server": {
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"name": "metrics-server",
+				"version": "1.2.1"
+			}
+		}
+	},
+	"resource": {
+		"huaweicloud_vpc": {
+			"vpc": {
+				"cidr": "172.16.0.0/16",
+				"name": "${var.vpc_name}"
+			}
+		},
+		"huaweicloud_vpc_eip": {
+			"myeip": {
+				"bandwidth": {
+					"charge_mode": "traffic",
+					"name": "${var.vpc_name}-bandwidth",
+					"share_type": "PER",
+					"size": 10
+				},
+				"publicip": {
+					"type": "5_bgp"
+				}
+			}
+		},
+		"huaweicloud_vpc_subnet": {
+			"subnet": {
+				"cidr": "172.16.10.0/24",
+				"gateway_ip": "172.16.10.1",
+				"name": "${var.vpc_name}-subnet",
+				"primary_dns": "100.125.1.250",
+				"vpc_id": "${huaweicloud_vpc.vpc.id}"
+			}
+		},
+		"huaweicloud_cce_addon": {
+			"autoscaler": {
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"template_name": "autoscaler",
+				"values": {
+					"basic": "${jsondecode(data.huaweicloud_cce_addon_template.autoscaler.spec).basic}",
+					"custom": {
+						"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+						"coresTotal": 32000,
+						"expander": "priority",
+						"logLevel": 4,
+						"maxEmptyBulkDeleteFlag": 10,
+						"maxNodeProvisionTime": 15,
+						"maxNodesTotal": 1000,
+						"memoryTotal": 128000,
+						"scaleDownDelayAfterAdd": 10,
+						"scaleDownDelayAfterDelete": 10,
+						"scaleDownDelayAfterFailure": 3,
+						"scaleDownEnabled": false,
+						"scaleDownUnneededTime": 5,
+						"scaleDownUtilizationThreshold": 0.5,
+						"scaleUpCpuUtilizationThreshold": 1,
+						"scaleUpMemUtilizationThreshold": 1,
+						"scaleUpUnscheduledPodEnabled": true,
+						"scaleUpUtilizationEnabled": true,
+						"tenant_id": "0f4db96fe080f5fe2f8ac012c7ae2ed5",
+						"unremovableNodeRecheckTimeout": 5
+					},
+					"flavor": {
+						"name": "HA50",
+						"replicas": 2
+					}
+				},
+				"version": "1.19.12"
+			},
+			"cce-hpa-controller": {
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"template_name": "cce-hpa-controller",
+				"values": {
+					"basic": "${jsondecode(data.huaweicloud_cce_addon_template.cce-hpa-controller.spec).basic}",
+					"flavor": {
+						"name": "Single",
+						"replicas": 1
+					}
+				},
+				"version": "1.2.11"
+			},
+			"metrics-server": {
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"template_name": "metrics-server",
+				"values": {
+					"basic": "${jsondecode(data.huaweicloud_cce_addon_template.metrics-server.spec).basic}",
+					"flavor": {
+						"name": "HA",
+						"replicas": 2
+					}
+				},
+				"version": "1.2.1"
+			}
+		},
+		"huaweicloud_cce_cluster": {
+			"cluster": {
+				"cluster_version": "v1.19",
+				"container_network_type": "vpc-router",
+				"eip": "${huaweicloud_vpc_eip.myeip.address}",
+				"flavor_id": "cce.s1.small",
+				"name": "${var.cce_name}",
+				"subnet_id": "${huaweicloud_vpc_subnet.subnet.id}",
+				"vpc_id": "${huaweicloud_vpc.vpc.id}"
+			}
+		},
+		"huaweicloud_cce_node_pool": {
+			"node_pool": {
+				"availability_zone": "random",
+				"cluster_id": "${huaweicloud_cce_cluster.cluster.id}",
+				"data_volumes": [
+					{
+						"size": 100,
+						"volumetype": "SAS"
+					}
+				],
+				"flavor_id": "c6s.xlarge.2",
+				"initial_node_count": 3,
+				"max_node_count": 10,
+				"min_node_count": 0,
+				"name": "${var.node_pool_name}",
+				"os": "EulerOS 2.5",
+				"password": "${var.node_pool_password}",
+				"priority": 1,
+				"root_volume": [
+					{
+						"size": 40,
+						"volumetype": "SAS"
+					}
+				],
+				"scale_down_cooldown_time": 0,
+				"scall_enable": true,
+				"subnet_id": "${huaweicloud_vpc_subnet.subnet.id}",
+				"type": "vm"
+			}
+		}
+	}
+}
